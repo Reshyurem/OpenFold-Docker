@@ -105,9 +105,9 @@ def fetch(source):
 
 
 fs = [ex.submit(fetch, source) for source in ["", "-europe", "-asia"]]
-source = None
+SOURCE = None
 for f in futures.as_completed(fs):
-    source = f.result()
+    SOURCE = f.result()
     ex.shutdown()
     break
 
@@ -137,7 +137,7 @@ with tqdm(total=TOTAL_JACKHMMER_CHUNKS, bar_format=TQDM_BAR_FORMAT) as pbar:
     jackhmmer_uniref90_runner = jackhmmer.Jackhmmer(
         binary_path=JACKHMMER_BINARY_PATH,
         database_path=f"https://storage.googleapis.com/alphafold\
-            -colab{source}/latest/uniref90_2021_03.fasta",
+            -colab{SOURCE}/latest/uniref90_2021_03.fasta",
         get_tblout=True,
         num_streamed_chunks=NUM_JACKHMMER_CHUNKS["uniref90"],
         streaming_callback=jackhmmer_chunk_callback,
@@ -149,7 +149,7 @@ with tqdm(total=TOTAL_JACKHMMER_CHUNKS, bar_format=TQDM_BAR_FORMAT) as pbar:
     jackhmmer_smallbfd_runner = jackhmmer.Jackhmmer(
         binary_path=JACKHMMER_BINARY_PATH,
         database_path=f"https://storage.googleapis.com/alphafold\
-            -colab{source}/latest/bfd-first_non_consensus_sequences.fasta",
+            -colab{SOURCE}/latest/bfd-first_non_consensus_sequences.fasta",
         get_tblout=True,
         num_streamed_chunks=NUM_JACKHMMER_CHUNKS["smallbfd"],
         streaming_callback=jackhmmer_chunk_callback,
@@ -161,7 +161,7 @@ with tqdm(total=TOTAL_JACKHMMER_CHUNKS, bar_format=TQDM_BAR_FORMAT) as pbar:
     jackhmmer_mgnify_runner = jackhmmer.Jackhmmer(
         binary_path=JACKHMMER_BINARY_PATH,
         database_path=f"https://storage.googleapis.com/alphafold\
-            -colab{source}/latest/mgy_clusters_2019_05.fasta",
+            -colab{SOURCE}/latest/mgy_clusters_2019_05.fasta",
         get_tblout=True,
         num_streamed_chunks=NUM_JACKHMMER_CHUNKS["mgnify"],
         streaming_callback=jackhmmer_chunk_callback,
