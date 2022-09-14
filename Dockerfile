@@ -57,3 +57,5 @@ RUN mkdir --parents /content/openfold/openfold/resources/openfold_params
 RUN aws s3 cp --no-sign-request --region us-east-1 s3://openfold/openfold_params /content/openfold/openfold/resources/openfold_params --recursive
 
 WORKDIR /openfold
+
+CMD python3 /openfold/openfold.py
