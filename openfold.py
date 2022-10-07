@@ -36,6 +36,9 @@ from openfold.utils.tensor_utils import tensor_tree_map
 # A filthy hack to avoid slow Linear layer initialization
 import openfold.model.primitives
 
+from fastapi import FastAPI
+
+app = FastAPI()
 
 def __default_linear_init__(self, *args, **kwargs):
     return torch.nn.Linear.__init__(
@@ -68,6 +71,10 @@ def format_input(unformatted_input):
     return formatted_input
 
 sequence = format_input(UNEDITED_SEQUENCE)
+
+@app.get("/sequence/{sequence}")
+def read_sequence(sequence: str):
+    return {"sequence": format_input(sequence)}
 
 sys.path.insert(0, "/usr/local/lib/python3.7/site-packages/")
 sys.path.append("/opt/conda/lib/python3.7/site-packages")

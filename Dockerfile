@@ -11,7 +11,7 @@ RUN apt-key del 7fa2af80
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
 
-RUN apt-get update && apt-get install -y wget curl unzip libxml2 cuda-minimal-build-11-3 libcusparse-dev-11-3 libcublas-dev-11-3 libcusolver-dev-11-3 git hmmer
+RUN apt-get update && apt-get install -y wget curl unzip libxml2 cuda-minimal-build-11-3 libcusparse-dev-11-3 libcublas-dev-11-3 libcusolver-dev-11-3 git hmmer vim
 
 RUN wget -P /tmp \
     "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" \
@@ -51,11 +51,13 @@ RUN pip3 install -q ./openfold
 # RUN cd -
 
 COPY input.txt /openfold/input.txt
-COPY openfold.py /openfold/openfold.py
+COPY openfold.py /openfold/main.py
 
 RUN mkdir --parents /content/openfold/openfold/resources/openfold_params
 RUN aws s3 cp --no-sign-request --region us-east-1 s3://openfold/openfold_params /content/openfold/openfold/resources/openfold_params --recursive
 
 WORKDIR /openfold
 
-CMD python3 /openfold/openfold.py
+# CMD python3 /openfold/openfold.py
+
+# CMD uvicorn main:app --host 0.0.0.0 --port 8000
