@@ -76,6 +76,10 @@ sequence = format_input(UNEDITED_SEQUENCE)
 def read_sequence(sequence: str):
     return {"sequence": format_input(sequence)}
 
+@app.get("/")
+def default():
+    return {"message": "Hello World"}
+
 sys.path.insert(0, "/usr/local/lib/python3.7/site-packages/")
 sys.path.append("/opt/conda/lib/python3.7/site-packages")
 

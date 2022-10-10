@@ -1,17 +1,23 @@
 import streamlit as st
 import py3Dmol
 from stmol import showmol
-st.sidebar.title('Show Proteins')
-prot_str='1A2C,1BML,1D5M,1D5X,1D5Z,1D6E,1DEE,1E9F,1FC2,1FCC,1G4U,1GZS,1HE1,1HEZ,1HQR,1HXY,1IBX,1JBU,1JWM,1JWS'
-prot_list=prot_str.split(',')
+st.sidebar.title('Openfold')
 protein = st.sidebar.text_input('Enter a protein name', '1A2C')
 spin = st.sidebar.checkbox('Spin', value = False)
-xyzview = py3Dmol.view(query='pdb:'+protein)
-xyzview.setStyle({'cartoon':{'color':'spectrum'}})
-xyzview.setBackgroundColor('#FFFFFF')
-if spin:
-    xyzview.spin(True)
-else:
-    xyzview.spin(False)
-xyzview.zoomTo()
-showmol(xyzview,height=500,width=800)
+
+def render_mol(xyz):
+    xyzview = py3Dmol.view(width=400,height=400)
+    xyzview.addModel(xyz,'xyz')
+    xyzview.setStyle({'color':'spectrum'})
+    xyzview.setBackgroundColor('white')
+    xyzview.zoomTo()
+    if spin:
+        xyzview.spin(True)
+    else:
+        xyzview.spin(False)
+    showmol(xyzview, height = 500,width=800)
+
+uploaded_files = st.sidebar.file_uploader("Choose xyz files")
+for uploaded_file in uploaded_files:
+    xyz = uploaded_file.getvalue().decode("utf-8")
+    render_mol(xyz)
