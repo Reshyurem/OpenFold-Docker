@@ -33,4 +33,5 @@ dependencies:
       - fastapi==0.85.0
       - pydantic==1.10.2
       - uvicorn==0.18.3
+      - starlette==0.20.4
       - git+https://github.com/NVIDIA/dllogger.git

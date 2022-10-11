@@ -37,6 +37,7 @@ from openfold.utils.tensor_utils import tensor_tree_map
 import openfold.model.primitives
 
 from fastapi import FastAPI
+from starlette.responses import FileResponse
 
 app = FastAPI()
 
@@ -92,7 +93,7 @@ def fetch(source):
 
 @app.get("/")
 def default():
-    return {"message": "Hello World"}
+    return FileResponse(path="/openfold/main.py", filename="/openfold/main.py", media_type="text/octet-stream")
 
 @app.get("/sequence/{sequence}")
 def read_sequence(seq: str):
@@ -396,3 +397,5 @@ def read_sequence(seq: str):
     pred_output_path = os.path.join(OUTPUT_DIR, "prediction.pdb")
     with open(pred_output_path, "w", encoding="utf-8") as f:
         f.write(to_visualize_pdb)
+
+    return FileResponse(path=pred_output_path, filename=pred_output_path, media_type="text/octet-stream")

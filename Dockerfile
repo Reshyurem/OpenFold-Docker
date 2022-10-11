@@ -50,7 +50,6 @@ RUN pip3 install -q ./openfold
 # RUN patch -p0 < /openfold/lib/openmm.patch
 # RUN cd -
 
-COPY input.txt /openfold/input.txt
 COPY openfold.py /openfold/main.py
 
 RUN mkdir --parents /content/openfold/openfold/resources/openfold_params
@@ -60,4 +59,4 @@ WORKDIR /openfold
 
 # CMD python3 /openfold/openfold.py
 
-CMD uvicorn main:app --proxy-headers --host 0.0.0.0 --port 80
+CMD uvicorn main:app --proxy-headers --host 0.0.0.0 --port 8000
