@@ -1,3 +1,6 @@
+"""
+OpenFold Implementation in a combination of the colab notebook and the original
+"""
 import unittest.mock
 import sys
 import os
@@ -27,13 +30,15 @@ from openfold.model import model
 from openfold.np import protein
 from openfold.np.relax import relax
 from openfold.np.relax import utils
-from openfold.utils.import_weights import import_jax_weights_
 from openfold.utils.tensor_utils import tensor_tree_map
 
 
 # A filthy hack to avoid slow Linear layer initialization
 import openfold.model.primitives
 
+from fastapi import FastAPI
+
+app = FastAPI()
 
 def __default_linear_init__(self, *args, **kwargs):
     return torch.nn.Linear.__init__(
@@ -43,133 +48,137 @@ def __default_linear_init__(self, *args, **kwargs):
 
 openfold.model.primitives.Linear.__init__ = __default_linear_init__
 
+sys.path.insert(0, "/usr/local/lib/python3.7/site-packages/")
+sys.path.append("/opt/conda/lib/python3.7/site-packages")
 
-relax_prediction = True
+# Allows us to skip installing these packages
+unnecessary_modules = [
+    "dllogger",
+    "pytorch_lightning",
+    "pytorch_lightning.utilities",
+    "pytorch_lightning.callbacks.early_stopping",
+    "pytorch_lightning.utilities.seed",
+]
+for unnecessary_module in unnecessary_modules:
+    sys.modules[unnecessary_module] = unittest.mock.MagicMock()
 
-sequence = ""
+RELAX_PREDICTION = True
 
-# with open("/openfold/input.txt") as f:
-#     sequence = f.readline().translate(str.maketrans("", "", " \n\t")).upper()
+UNEDITED_SEQUENCE = ""
 
-# aatypes = set("ACDEFGHIKLMNPQRSTVWY")  # 20 standard aatypes
+def format_input(unformatted_input):
+    """Function to format the input sequence"""
+    formatted_input = unformatted_input.translate(str.maketrans("", "", " \n\t")).upper()
+    aatypes = set("ACDEFGHIKLMNPQRSTVWY")  # 20 standard aatypes
 
-# if not set(sequence).issubset(aatypes):
-#     raise Exception(
-#         f"Input sequence contains non-amino acid letters: \
-#         {set(sequence) - aatypes}. \
-#         OpenFold only supports 20 standard amino acids as inputs."
-#     )
+    if not set(formatted_input).issubset(aatypes):
+        raise Exception(
+            f"Input sequence contains non-amino acid letters: \
+            {set(formatted_input) - aatypes}. \
+            OpenFold only supports 20 standard amino acids as inputs."
+        )
 
-# sys.path.insert(0, "/usr/local/lib/python3.7/site-packages/")
-# sys.path.append("/opt/conda/lib/python3.7/site-packages")
+    return formatted_input
 
-# # Allows us to skip installing these packages
-# unnecessary_modules = [
-#     "dllogger",
-#     "pytorch_lightning",
-#     "pytorch_lightning.utilities",
-#     "pytorch_lightning.callbacks.early_stopping",
-#     "pytorch_lightning.utilities.seed",
-# ]
-# for unnecessary_module in unnecessary_modules:
-#     sys.modules[unnecessary_module] = unittest.mock.MagicMock()
+def fetch(source):
+    """--- Find the closest source ---"""
+    request.urlretrieve(TEST_URL_PATTERN.format(source))
+    return source
 
-# # @title Search against genetic databases
+@app.get("/sequence/{sequence}")
+def read_sequence(sequence: str):
+    return {"sequence": format_input(sequence)}
 
-# # @markdown Once this cell has been executed, you will see
-# # @markdown statistics about the multiple sequence alignment
-# # @markdown (MSA) that will be used by OpenFold. In particular,
-# # @markdown you’ll see how well each residue is covered by similar
-# # @markdown sequences in the MSA.
+@app.get("/")
+def default():
+    return {"message": "Hello World"}
 
-# # --- Find the closest source ---
-# test_url_pattern = (
-#     "https://storage.googleapis.com/alphafold-colab{:s}"
-#     + "/latest/uniref90_2021_03.fasta.1"
-# )
-# ex = futures.ThreadPoolExecutor(3)
+# @title Search against genetic databases
 
+# @markdown Once this cell has been executed, you will see
+# @markdown statistics about the multiple sequence alignment
+# @markdown (MSA) that will be used by OpenFold. In particular,
+# @markdown you’ll see how well each residue is covered by similar
+# @markdown sequences in the MSA.
 
-# def fetch(source):
-#     request.urlretrieve(test_url_pattern.format(source))
-#     return source
+# --- Find the closest source ---
+TEST_URL_PATTERN = (
+    "https://storage.googleapis.com/alphafold-colab{:s}"
+    + "/latest/uniref90_2021_03.fasta.1"
+)
+ex = futures.ThreadPoolExecutor(3)
 
+fs = [ex.submit(fetch, source) for source in ["", "-europe", "-asia"]]
+SOURCE = None
+for f in futures.as_completed(fs):
+    SOURCE = f.result()
+    ex.shutdown()
+    break
 
-# fs = [ex.submit(fetch, source) for source in ["", "-europe", "-asia"]]
-# source = None
-# for f in futures.as_completed(fs):
-#     source = f.result()
-#     ex.shutdown()
-#     break
+# --- Search against genetic databases ---
+with open("target.fasta", "wt", encoding="utf-8") as f:
+    f.write(f">query\n{sequence}")
 
-# # --- Search against genetic databases ---
-# with open("target.fasta", "wt") as f:
-#     f.write(f">query\n{sequence}")
+# Run the search against chunks of genetic databases (since the genetic
+# databases don't fit in Colab ramdisk).
 
-# # Run the search against chunks of genetic databases (since the genetic
-# # databases don't fit in Colab ramdisk).
-
-# jackhmmer_binary_path = "/usr/bin/jackhmmer"
-# dbs = []
+JACKHMMER_BINARY_PATH = "/usr/bin/jackhmmer"
+dbs = []
 TQDM_BAR_FORMAT = (
     "{l_bar}{bar}| {n_fmt}/{total_fmt}"
     + " [elapsed: {elapsed} remaining: {remaining}]"
 )
 
-# num_jackhmmer_chunks = {"uniref90": 59, "smallbfd": 17, "mgnify": 71}
-# total_jackhmmer_chunks = sum(num_jackhmmer_chunks.values())
-# with tqdm(total=total_jackhmmer_chunks, bar_format=TQDM_BAR_FORMAT) as pbar:
+NUM_JACKHMMER_CHUNKS = {"uniref90": 59, "smallbfd": 17, "mgnify": 71}
+TOTAL_JACKHMMER_CHUNKS = sum(NUM_JACKHMMER_CHUNKS.values())
+with tqdm(total=TOTAL_JACKHMMER_CHUNKS, bar_format=TQDM_BAR_FORMAT) as pbar:
 
-#     def jackhmmer_chunk_callback(i):
-#         pbar.update(n=1)
+    def jackhmmer_chunk_callback(i):
+        """Update the tqdm bar progress"""
+        pbar.update(n=1)
 
-#     pbar.set_description("Searching uniref90")
-#     jackhmmer_uniref90_runner = jackhmmer.Jackhmmer(
-#         binary_path=jackhmmer_binary_path,
-#         database_path=f"https://storage.googleapis.com/alphafold\
-#             -colab{source}/latest/uniref90_2021_03.fasta",
-#         get_tblout=True,
-#         num_streamed_chunks=num_jackhmmer_chunks["uniref90"],
-#         streaming_callback=jackhmmer_chunk_callback,
-#         z_value=135301051,
-#     )
-#     dbs.append(("uniref90", jackhmmer_uniref90_runner.query("target.fasta")))
+    pbar.set_description("Searching uniref90")
+    jackhmmer_uniref90_runner = jackhmmer.Jackhmmer(
+        binary_path=JACKHMMER_BINARY_PATH,
+        database_path=f"https://storage.googleapis.com/alphafold\
+            -colab{SOURCE}/latest/uniref90_2021_03.fasta",
+        get_tblout=True,
+        num_streamed_chunks=NUM_JACKHMMER_CHUNKS["uniref90"],
+        streaming_callback=jackhmmer_chunk_callback,
+        z_value=135301051,
+    )
+    dbs.append(("uniref90", jackhmmer_uniref90_runner.query("target.fasta")))
 
-#     pbar.set_description("Searching smallbfd")
-#     jackhmmer_smallbfd_runner = jackhmmer.Jackhmmer(
-#         binary_path=jackhmmer_binary_path,
-#         database_path=f"https://storage.googleapis.com/alphafold\
-#             -colab{source}/latest/bfd-first_non_consensus_sequences.fasta",
-#         get_tblout=True,
-#         num_streamed_chunks=num_jackhmmer_chunks["smallbfd"],
-#         streaming_callback=jackhmmer_chunk_callback,
-#         z_value=65984053,
-#     )
-#     dbs.append(("smallbfd", jackhmmer_smallbfd_runner.query("target.fasta")))
+    pbar.set_description("Searching smallbfd")
+    jackhmmer_smallbfd_runner = jackhmmer.Jackhmmer(
+        binary_path=JACKHMMER_BINARY_PATH,
+        database_path=f"https://storage.googleapis.com/alphafold\
+            -colab{SOURCE}/latest/bfd-first_non_consensus_sequences.fasta",
+        get_tblout=True,
+        num_streamed_chunks=NUM_JACKHMMER_CHUNKS["smallbfd"],
+        streaming_callback=jackhmmer_chunk_callback,
+        z_value=65984053,
+    )
+    dbs.append(("smallbfd", jackhmmer_smallbfd_runner.query("target.fasta")))
 
-#     pbar.set_description("Searching mgnify")
-#     jackhmmer_mgnify_runner = jackhmmer.Jackhmmer(
-#         binary_path=jackhmmer_binary_path,
-#         database_path=f"https://storage.googleapis.com/alphafold\
-#             -colab{source}/latest/mgy_clusters_2019_05.fasta",
-#         get_tblout=True,
-#         num_streamed_chunks=num_jackhmmer_chunks["mgnify"],
-#         streaming_callback=jackhmmer_chunk_callback,
-#         z_value=304820129,
-#     )
-#     dbs.append(("mgnify", jackhmmer_mgnify_runner.query("target.fasta")))
+    pbar.set_description("Searching mgnify")
+    jackhmmer_mgnify_runner = jackhmmer.Jackhmmer(
+        binary_path=JACKHMMER_BINARY_PATH,
+        database_path=f"https://storage.googleapis.com/alphafold\
+            -colab{SOURCE}/latest/mgy_clusters_2019_05.fasta",
+        get_tblout=True,
+        num_streamed_chunks=NUM_JACKHMMER_CHUNKS["mgnify"],
+        streaming_callback=jackhmmer_chunk_callback,
+        z_value=304820129,
+    )
+    dbs.append(("mgnify", jackhmmer_mgnify_runner.query("target.fasta")))
 
 
-# # --- Extract the MSAs and visualize ---
-# # Extract the MSAs from the Stockholm files.
-# # NB: deduplication happens later in data_pipeline.make_msa_features.
+# --- Extract the MSAs and visualize ---
+# Extract the MSAs from the Stockholm files.
+# NB: deduplication happens later in data_pipeline.make_msa_features.
 
-import pickle
-
-with open('./dbs', 'rb') as fp:
-    dbs = pickle.load(fp)
-
-mgnify_max_hits = 501
+MGNIFY_MAX_HITS = 501
 
 msas = []
 deletion_matrices = []
@@ -191,8 +200,8 @@ for db_name, db_results in dbs:
     db_msas, db_deletion_matrices, _, _ = zip(*sorted_by_evalue)
     if db_msas:
         if db_name == "mgnify":
-            db_msas = db_msas[:mgnify_max_hits]
-            db_deletion_matrices = db_deletion_matrices[:mgnify_max_hits]
+            db_msas = db_msas[:MGNIFY_MAX_HITS]
+            db_deletion_matrices = db_deletion_matrices[:MGNIFY_MAX_HITS]
         full_msa.extend(db_msas)
         msas.append(db_msas)
         deletion_matrices.append(db_deletion_matrices)
@@ -200,8 +209,8 @@ for db_name, db_results in dbs:
         print(f"{msa_size} Sequences Found in {db_name}")
 
 deduped_full_msa = list(dict.fromkeys(full_msa))
-total_msa_size = len(deduped_full_msa)
-print(f"\n{total_msa_size} Sequences Found in Total\n")
+TOTAL_MSA_SIZE = len(deduped_full_msa)
+print(f"\n{TOTAL_MSA_SIZE} Sequences Found in Total\n")
 
 aa_map = {
     restype: i for i, restype in enumerate(
@@ -258,8 +267,8 @@ def _placeholder_template_feats(num_templates_, num_res_):
     }
 
 
-output_dir = "prediction"
-os.makedirs(output_dir, exist_ok=True)
+OUTPUT_DIR = "prediction"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 plddts = {}
 pae_outputs = {}
@@ -269,7 +278,7 @@ OPENFOLD_PARAMS_DIR = "/content/openfold/openfold/resources/openfold_params"
 with tqdm(total=len(model_names) + 1, bar_format=TQDM_BAR_FORMAT) as pbar:
     for i, model_name in list(enumerate(model_names)):
         pbar.set_description(f"Running {model_name}")
-        num_templates = 1  # dummy number --- is ignored
+        NUM_TEMPLATES = 1  # dummy number --- is ignored
         num_res = len(sequence)
 
         feature_dict = {}
@@ -287,17 +296,17 @@ with tqdm(total=len(model_names) + 1, bar_format=TQDM_BAR_FORMAT) as pbar:
             )
         )
         feature_dict.update(
-            _placeholder_template_feats(num_templates, num_res)
+            _placeholder_template_feats(NUM_TEMPLATES, num_res)
         )
 
         if "_no_templ_" in model_name:
-            config_preset = "model_3"
+            CONFIG_PRESET = "model_3"
         else:
-            config_preset = "model_1"
+            CONFIG_PRESET = "model_1"
         if "_ptm_" in model_name:
-            config_preset += "_ptm"
+            CONFIG_PRESET += "_ptm"
 
-        cfg = config.model_config(config_preset)
+        cfg = config.model_config(CONFIG_PRESET)
         openfold_model = model.AlphaFold(cfg)
         openfold_model = openfold_model.eval()
         params_name = os.path.join(OPENFOLD_PARAMS_DIR, model_name)
@@ -356,10 +365,10 @@ with tqdm(total=len(model_names) + 1, bar_format=TQDM_BAR_FORMAT) as pbar:
 
     # Find the best model according to the mean pLDDT.
     best_model_name = max(plddts.keys(), key=lambda x: plddts[x].mean())
-    best_pdb = protein.to_pdb(unrelaxed_proteins[best_model_name])
+    BEST_PDB = protein.to_pdb(unrelaxed_proteins[best_model_name])
 
     # --- AMBER relax the best model ---
-    if relax_prediction:
+    if RELAX_PREDICTION:
         pbar.set_description(f"AMBER relaxation")
         amber_relaxer = relax.AmberRelaxation(
             max_iterations=0,
@@ -374,11 +383,11 @@ with tqdm(total=len(model_names) + 1, bar_format=TQDM_BAR_FORMAT) as pbar:
         )
 
         # Write out the prediction
-        pred_output_path = os.path.join(output_dir, "selected_prediction.pdb")
-        with open(pred_output_path, "w") as f:
+        pred_output_path = os.path.join(OUTPUT_DIR, "selected_prediction.pdb")
+        with open(pred_output_path, "w", encoding="utf-8") as f:
             f.write(relaxed_pdb)
 
-        best_pdb = relaxed_pdb
+        BEST_PDB = relaxed_pdb
 
     pbar.update(n=1)  # Finished AMBER relax.
 
@@ -387,14 +396,14 @@ with tqdm(total=len(model_names) + 1, bar_format=TQDM_BAR_FORMAT) as pbar:
 banded_b_factors = []
 for plddt in plddts[best_model_name]:
     for idx, (min_val, max_val, _) in enumerate(PLDDT_BANDS):
-        if plddt >= min_val and plddt <= max_val:
+        if min_val <= plddt <= max_val:
             banded_b_factors.append(idx)
             break
 banded_b_factors = np.array(banded_b_factors)[:, None] * final_atom_mask
-to_visualize_pdb = utils.overwrite_b_factors(best_pdb, banded_b_factors)
+to_visualize_pdb = utils.overwrite_b_factors(BEST_PDB, banded_b_factors)
 
 # --- Visualise the prediction & confidence ---
-show_sidechains = True
+SHOW_SIDECHAINS = True
 # def plot_plddt_legend():
 #     """Plots the legend for pLDDT."""
 #     thresh = [
@@ -432,7 +441,7 @@ show_sidechains = True
 #         'prop': 'b',
 #         'map': color_map}
 #         }}
-# if show_sidechains:
+# if SHOW_SIDECHAINS:
 #     style['stick'] = {}
 # view.setStyle({'model': -1}, style)
 # view.zoomTo()
@@ -453,18 +462,18 @@ show_sidechains = True
 
 # Display pLDDT and predicted aligned error (if output by the model).
 if pae_outputs:
-    num_plots = 2
+    NUM_PLOTS = 2
 else:
-    num_plots = 1
+    NUM_PLOTS = 1
 
-plt.figure(figsize=[8 * num_plots, 6])
-plt.subplot(1, num_plots, 1)
+plt.figure(figsize=[8 * NUM_PLOTS, 6])
+plt.subplot(1, NUM_PLOTS, 1)
 plt.plot(plddts[best_model_name])
 plt.title("Predicted LDDT")
 plt.xlabel("Residue")
 plt.ylabel("pLDDT")
 
-if num_plots == 2:
+if NUM_PLOTS == 2:
     plt.subplot(1, 2, 2)
     pae, max_pae = list(pae_outputs.values())[0]
     plt.colorbar(fraction=0.046, pad=0.04)
@@ -475,7 +484,7 @@ if num_plots == 2:
 plt.imsave("prediction.png", pae, vmin=0.0, vmax=max_pae, cmap="Greens_r")
 
 # Save pLDDT and predicted aligned error (if it exists)
-pae_output_path = os.path.join(output_dir, "predicted_aligned_error.json")
+pae_output_path = os.path.join(OUTPUT_DIR, "predicted_aligned_error.json")
 if pae_outputs:
     # Save predicted aligned error in the same format as the AF EMBL DB
     rounded_errors = np.round(pae.astype(np.float64), decimals=1)
@@ -494,5 +503,5 @@ if pae_outputs:
         indent=None,
         separators=(",", ":"),
     )
-    with open(pae_output_path, "w") as f:
+    with open(pae_output_path, "w", encoding="utf-8") as f:
         f.write(pae_data)
