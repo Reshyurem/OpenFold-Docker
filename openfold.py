@@ -95,7 +95,7 @@ def fetch(source):
 def default():
     return FileResponse(path="/openfold/main.py", filename="/openfold/main.py", media_type="text/octet-stream")
 
-@app.get("/sequence/{sequence}")
+@app.get("/sequence/{seq}")
 def read_sequence(seq: str):
     # Get the sequence formatted
     sequence = format_input(seq)
